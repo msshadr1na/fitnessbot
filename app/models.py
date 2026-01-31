@@ -1,13 +1,18 @@
 
+class Settings:
+    def __init__(self, id, notification_settings):
+        self.id = id
+        self.notification_settings = notification_settings
 
 class User:
-    def __init__(self, id, telegram_id, phone, first_name, last_name, middle_name = None):
+    def __init__(self, id, telegram_id, phone, first_name, last_name, settings_id, middle_name = None):
         self.id = id
         self.telegram_id = telegram_id
         self.phone = phone
         self.first_name = first_name
         self.last_name = last_name
         self.middle_name = middle_name
+        self.settings_id = settings_id
 
 class Role:
     def __init__(self, id, name):
@@ -57,10 +62,10 @@ class Booking:
         self.created_at = created_at
 
 class Review:
-    def __init__(self, id, text, rating, user_id, training_id):
+    def __init__(self, id, text, grade, user_id, training_id):
         self.id = id
         self.text = text
-        self.rating = rating
+        self.grade = grade
         self.user_id = user_id
         self.training_id = training_id
 
