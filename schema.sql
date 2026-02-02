@@ -65,7 +65,6 @@ CREATE TABLE training (
     organization_id INTEGER NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
     gym_id INTEGER NOT NULL REFERENCES gym(id) ON DELETE CASCADE,
     trainer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    name VARCHAR(100),
     date_start TIMESTAMP NOT NULL,
     date_end TIMESTAMP NOT NULL,
     type_id INTEGER NOT NULL REFERENCES training_type(id),
@@ -86,6 +85,5 @@ CREATE TABLE review (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     training_id INTEGER NOT NULL REFERENCES training(id) ON DELETE CASCADE,
     grade INTEGER NOT NULL CHECK (grade BETWEEN 1 AND 5),
-    text TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    text TEXT
 );
