@@ -74,6 +74,15 @@ class OrganizationRepository:
         organization.id = row["id"]
         return organization
 
+    async def find_by_name(self, name):
+        sql = "select * from organization where name = $1"
+        row = await self.pool.fetchroww(sql,name)
+
+        if not row:
+            return None
+        else:    
+            return Organization(row["id"],row["name"])
+
 class TrainingRepository:
     def __init__(self,pool):
         self.pool = pool
