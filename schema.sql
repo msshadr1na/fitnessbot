@@ -31,8 +31,8 @@ CREATE TABLE users (
     first_name VARCHAR(50) NOT null,
     last_name VARCHAR(50) NOT null,
     middle_name VARCHAR(50),
-    settings INT not null,
-    foreign key (settings) references settings(id) on delete restrict
+    settings_id INT not null,
+    foreign key (settings_id) references settings(id) on delete restrict
 );
 
 

@@ -1,4 +1,5 @@
 from app.models import Settings, TrainingType, Training, User, OrganizationMember, Organization, Gym, Booking, Review
+import json
 
 class SettingsRepository:
     def __init__(self, pool):
@@ -6,7 +7,10 @@ class SettingsRepository:
 
     async def create(self, settings: Settings):
         sql = "insert into settings (notification_settings) values ($1) returning id"
-        row = await self.pool.fetchrow(sql, settings.notification_settings)
+
+        json_value = json.dumps(settings.notification_settings)
+    
+        row = await self.pool.fetchrow(sql, json_value)
 
         settings.id = row["id"]
         return settings
