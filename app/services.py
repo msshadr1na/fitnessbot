@@ -1,4 +1,4 @@
-from infrastructure.repositories import UserRepository, SettingsRepository, OrganizationRepository, OrganizationMemberRepository
+from infrastructure.repositories import BookingRepository, UserRepository, SettingsRepository, OrganizationRepository, OrganizationMemberRepository, TrainingRepository
 from app.models import Settings, User, Organization, OrganizationMember
 
 class UserService:
@@ -15,14 +15,20 @@ class UserService:
         newUser = User(None, telegram_id, phone, first_name, last_name, saved_settings.id, middle_name)
         return await self.user_repository.create(newUser)
 
-class OrganiationService:
+class OrganizationService:
     def __init__(self, organization_repository : OrganizationRepository, organizationMember_repository : OrganizationMemberRepository):
         self.organization_repository = organization_repository
         self.organizationMember_repository = organizationMember_repository
 
+# Поиск организации по названию
     async def find_by_name(self, name):
         return await self.organization_repository.find_by_name(name)
 
+    async def get_by_id(self,id):
+        organization = await self.organization_repository.find_by_id(id)
+        return organization
+
+# Создание организации (добавление в бд)
     async def create_organization(self, user: User, name):
         newOrganization = Organization(None,name)
         savedOrganization = await self.organization_repository.create(newOrganization)
@@ -30,10 +36,22 @@ class OrganiationService:
         owner = await self.organizationMember_repository.create(newOrganizationMember)
         return savedOrganization
 
-    # Поиск организаций с таким же именем, чтобы нельзя было повторяться
-    # Удаление организации
-    # Просмотр организаций, которыми пользователь владеет
-    # Редактирование созданной организации
+# Удаление организации и всех зависимостей
+    async def delete_organization(self, user_id, org_id):      
+        organization = await self.organization_repository.find_by_id(org_id)
+        if not organization:
+            raise ValueError("Организация не найдена")
+
+        organization = await self.organization_repository.delete(org_id)
+        return organization
+
+# Просмотр организаций, которыми пользователь владеет
+    async def show_owned_orgs(self,user_id):
+        org_ids = await self.organizationMember_repository.get_membered_orgs(user_id, 1)
+        names = await self.organizationMember_repository.get_names_by_ids(org_ids)
+        return org_ids, names
+
+# Редактирование созданной организации
 
 
 
