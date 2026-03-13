@@ -69,4 +69,10 @@ class Review:
         self.user_id = user_id
         self.training_id = training_id
 
+class Invite:
+    def __init__(self, id, organization_id, role_id, code):
+        self.id = id
+        self.organization_id = organization_id
+        self.role_id = role_id
+        self.code = code
 

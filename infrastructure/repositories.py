@@ -1,6 +1,7 @@
 from multiprocessing import Pool
-from app.models import Settings, TrainingType, Training, User, OrganizationMember, Organization, Gym, Booking, Review
+from app.models import Settings, TrainingType, Training, User, OrganizationMember, Organization, Gym, Booking, Review,Invite
 import json
+import secrets
 
 class SettingsRepository:
     def __init__(self, pool):
@@ -53,6 +54,12 @@ class OrganizationMemberRepository:
 
         member.id = row["id"]
         return member
+
+    async def get_by_user_and_org(self, user_id, org_id):
+        sql = "select * from organization_member where user_id = $1 and organization_id = $2"
+
+        row = await self.pool.fetchrow(sql, user_id, org_id)
+        return OrganizationMember(row["id"], row["user_id"], row["role_id"], row["organization_id"]) if row else None
 
     async def delete(self, organization_member: OrganizationMember):
         sql = """delete from organization_member 
@@ -182,3 +189,30 @@ class ReviewRepository:
 
         review.id = row["id"]
         return review
+
+class InviteRepository:
+    def __init__(self, pool):
+        self.pool = pool
+
+    async def create(self, organization_id, role_id):
+        code = secrets.token_urlsafe(12)
+        sql ="""insert into invites (organization_id, role_id, code) values ($1, $2, $3)
+            returning id, organization_id, role_id, code"""
+        row = await self.pool.fetchrow(sql, organization_id, role_id, code)
+        return Invite(**row)
+
+    async def get_by_code(self, code):
+        sql = """select id, organization_id, role_id, code from invites
+            where code = $1"""
+        row = await self.pool.fetchrow(sql, code)
+        if row:
+            return Invite(**row)
+        return None
+
+    async def get_by_org_and_role(self, organization_id: int, role_id: int):
+        sql = """select id, organization_id, role_id, code from invites
+            where organization_id = $1 and role_id = $2"""
+        row = await self.pool.fetchrow(sql, organization_id, role_id)
+        if row:
+            return Invite(**row)
+        return None

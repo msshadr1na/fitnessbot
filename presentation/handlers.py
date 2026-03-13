@@ -1,10 +1,11 @@
 from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import inline_keyboard_button, reply_markup_union, users_shared, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
-from app.models import User
+from aiogram.types import inline_keyboard_button, reply_keyboard_markup, reply_markup_union, users_shared, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from asyncpg import pool
+from app.models import Organization, User
 from app.services import OrganizationMemberRepository, UserService, OrganizationService
 from infrastructure.database import get_db_pool
-from infrastructure.repositories import UserRepository, SettingsRepository, OrganizationRepository
+from infrastructure.repositories import UserRepository, SettingsRepository, OrganizationRepository, InviteRepository
 import presentation.keyboards
 
 router = Router()
@@ -15,23 +16,57 @@ waiting_for_delete_confirm = set()
 
 # Команды
 @router.message(CommandStart())
-async def handle_start(message: types.Message):
+async def handle_start(message: types.Message, command: Command):
     pool = await get_db_pool()
 
     userRepo = UserRepository(pool)
     settingsRepos = SettingsRepository(pool)
 
-    user_service = UserService(userRepo,settingsRepos)
+    user_service = UserService(userRepo, settingsRepos)
 
     user_id = message.from_user.id
     user = await user_service.find_by_tgid(user_id)
-    if (user == None):
-        if message.from_user.last_name == None:
+    
+    # Если пользователь новый — регистрируем
+    if user is None:
+        if message.from_user.last_name is None:
             last_name = "Фамилия"
         else:
             last_name = message.from_user.last_name
-        user = await user_service.registration(user_id, None, message.from_user.first_name, last_name, None)
+        user = await user_service.registration(
+            user_id, 
+            None, 
+            message.from_user.first_name, 
+            last_name, 
+            None
+        )
 
+    # Проверяем, есть ли аргументы (приглашение)
+    args = command.args
+    if args and args.startswith("join_"):
+        invite_code = args[len("join_"):]
+        
+        # Подключаем репозитории для обработки приглашения
+        org_repo = OrganizationRepository(pool)
+        org_member_repo = OrganizationMemberRepository(pool)
+        invite_repo = InviteRepository(pool)
+        org_service = OrganizationService(org_repo, org_member_repo, invite_repo)
+        
+        try:
+            role_id = await org_service.accept_invite(invite_code, user.id)
+            role_name = {2: "тренер", 3: "клиент"}.get(role_id, "участник")
+            await message.answer(f" Вы добавлены в организацию как {role_name}!")
+        except ValueError as e:
+            await message.answer(f"Ошибка: {e}")
+        except Exception as e:
+            await message.answer(f"Не удалось присоединиться: {e}")
+        
+        # После обработки приглашения — показываем обычное меню
+        keyboard = presentation.keyboards.build_start_keyboard()
+        await message.answer(f"Добро пожаловать, {user.first_name}!\nВойти как:", reply_markup=keyboard)
+        return
+
+    # Обычный старт — без приглашения
     keyboard = presentation.keyboards.build_start_keyboard()
     await message.answer(f"Добро пожаловать, {user.first_name}!\nВойти как:", reply_markup=keyboard)
 
@@ -46,7 +81,7 @@ async def start_create_note(message: types.Message):
     pool = await get_db_pool()
 
     user_service = UserService(UserRepository(pool),SettingsRepository(pool))
-    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool), InviteRepository(pool))
 
 
     user = await user_service.find_by_tgid(message.from_user.id)
@@ -89,7 +124,7 @@ async def confirm_delete_org(callback: CallbackQuery):
     org_repo = OrganizationRepository(pool)
     org_member_repo = OrganizationMemberRepository(pool)
     user_service = UserService(user_repo, SettingsRepository(pool))
-    org_service = OrganizationService(org_repo, org_member_repo)
+    org_service = OrganizationService(org_repo, org_member_repo, InviteRepository(pool))
 
     user = await user_service.find_by_tgid(callback.from_user.id)
     org = await org_service.get_by_id(org_id)
@@ -119,7 +154,7 @@ async def choose_org(callback):
 
     pool = await get_db_pool()
     user_service = UserService(UserRepository(pool), SettingsRepository(pool))
-    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool), InviteRepository(pool))
 
     user = await user_service.find_by_tgid(callback.from_user.id)
     ids, names = await org_service.show_owned_orgs(user.id)
@@ -135,9 +170,51 @@ async def choose_org(callback):
 async def start_create_org(callback: types.CallbackQuery):
     user_id = callback.from_user.id
     waiting_for_name.add(user_id)
+    await callback.message.delete()
+    
     await callback.message.answer("Введите название для будущей организации:")
+
     await callback.answer()
 
+
+
+@router.callback_query(F.data.startswith("choose.org_"))
+async def choose_org(callback: types.CallbackQuery):
+    org_id = int(callback.data.split("_")[-1])
+
+    pool = await get_db_pool()
+    org_service = OrganizationService(OrganizationRepository(pool), OrganizationMemberRepository(pool), InviteRepository(pool))
+    name = await org_service.get_by_id(org_id)
+
+    keyboard = presentation.keyboards.build_manage_org_keyboard(org_id)
+
+    await callback.message.edit_text(f"Организация {name.name}", reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith("mng.workers_"))
+async def manage_workers(callback: types.CallbackQuery):
+    org_id = int(callback.data.split("_")[-1])
+
+    keyboard = presentation.keyboards.build_manage_workers_keyboard(org_id)
+    
+    await callback.message.edit_text("Управление работниками", reply_markup=keyboard)
+
+@router.callback_query(F.data.startswith("invite.worker_"))
+async def invite_worker(callback: types.CallbackQuery):
+    org_id = int(callback.data.split("_")[-1])
+    role_id = 2
+
+    pool = await get_db_pool()
+    invite_repo = InviteRepository(pool)
+    user_service = UserService(UserRepository(pool), SettingsRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool), OrganizationMemberRepository(pool), InviteRepository(pool))
+
+    user = await user_service.find_by_tgid(callback.message.from_user.id)
+
+    link = await org_service.get_or_create_invite(org_id, 2)
+
+    keyboard = presentation.keyboards.build_invite_code_keyboard(link, org_id)
+
+    await callback.message.edit_text(f"Приглашение для работников:\n{link}", reply_markup=keyboard)
    
 
 
@@ -165,7 +242,7 @@ async def handle_create_organization(message: types.Message):
     userRepo = UserRepository(pool)
     settingsRepos = SettingsRepository(pool)
     user_service = UserService(userRepo, settingsRepos)
-    organization_service = OrganizationService(organizationRepo, organizationMemberRepo)
+    organization_service = OrganizationService(organizationRepo, organizationMemberRepo,InviteRepository(pool))
 
     user = await user_service.find_by_tgid(user_id)
     is_created = await organization_service.find_by_name(name)
