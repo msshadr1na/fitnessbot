@@ -1,11 +1,11 @@
 from aiogram import Router, types, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import users_shared, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
+from aiogram.types import inline_keyboard_button, reply_markup_union, users_shared, InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from app.models import User
 from app.services import OrganizationMemberRepository, UserService, OrganizationService
 from infrastructure.database import get_db_pool
 from infrastructure.repositories import UserRepository, SettingsRepository, OrganizationRepository
-
+import presentation.keyboards
 
 router = Router()
 
@@ -13,6 +13,7 @@ waiting_for_name = set()
 waiting_for_org_num = set()
 waiting_for_delete_confirm = set()
 
+# Команды
 @router.message(CommandStart())
 async def handle_start(message: types.Message):
     pool = await get_db_pool()
@@ -31,7 +32,8 @@ async def handle_start(message: types.Message):
             last_name = message.from_user.last_name
         user = await user_service.registration(user_id, None, message.from_user.first_name, last_name, None)
 
-    await message.answer(f"Добро пожаловать, {user.first_name}!\n")
+    keyboard = presentation.keyboards.build_start_keyboard()
+    await message.answer(f"Добро пожаловать, {user.first_name}!\nВойти как:", reply_markup=keyboard)
 
 @router.message(Command("create"))
 async def start_create_note(message: types.Message):
@@ -43,13 +45,8 @@ async def start_create_note(message: types.Message):
 async def start_create_note(message: types.Message):
     pool = await get_db_pool()
 
-    user_repo = UserRepository(pool)
-    org_repo = OrganizationRepository(pool)
-    org_member_repo = OrganizationMemberRepository(pool)
-    settings_repo = SettingsRepository(pool)
-
-    user_service = UserService(user_repo,settings_repo)
-    org_service = OrganizationService(org_repo,org_member_repo)
+    user_service = UserService(UserRepository(pool),SettingsRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool))
 
 
     user = await user_service.find_by_tgid(message.from_user.id)
@@ -62,25 +59,25 @@ async def start_create_note(message: types.Message):
     if len(orgs) < 1:
         await message.answer("У вас нет организаций для удаления")
     else:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=name, callback_data=f"del_org_{org_id}")] for org_id, name in zip(ids, orgs)])
+        keyboard = presentation.keyboards.build_delete_org_keyboard(ids,orgs)
 
         await message.answer("Выберите организацию для удаления:", reply_markup=keyboard)
 
-        waiting_for_delete_confirm.add(message.from_user.id)
+# Обработчики кнопок
+
+@router.callback_query(F.data.startswith("start"))
+async def cancel_delete_org(callback: CallbackQuery):
+    keyboard = presentation.keyboards.build_start_keyboard()
+    await callback.message.answer("Войти как:", reply_markup=keyboard)
 
 
 @router.callback_query(F.data.startswith("del_org_"))
 async def confirm_delete(callback: CallbackQuery):
     org_id = int(callback.data.split("_")[-1])
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Да, удалить", callback_data=f"confirm_del_{org_id}")],
-        [InlineKeyboardButton(text="Отмена", callback_data="cancel_del")]
-    ])
+    keyboard = presentation.keyboards.build_confirm_delete_org(org_id)
     
     await callback.message.edit_text(
-        f"Вы уверены, что хотите удалить организацию?",
-        reply_markup=keyboard
-    )
+        f"Вы уверены, что хотите удалить организацию?", reply_markup=keyboard)
     await callback.answer()
 
 @router.callback_query(F.data.startswith("confirm_del_"))
@@ -102,8 +99,50 @@ async def confirm_delete_org(callback: CallbackQuery):
 
     await callback.answer()
 
+@router.callback_query(F.data.startswith("cancel_del"))
+async def cancel_delete_org(callback: CallbackQuery):
+    await callback.message.edit_text(f"Организация не была удалена.")
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("owner"))
+async def as_org(callback: CallbackQuery):
+    pool = await get_db_pool()
+    user_service = UserService(UserRepository(pool), SettingsRepository(pool))
+    user = await user_service.find_by_tgid(callback.from_user.id)
+
+    keyboard = await presentation.keyboards.build_org_keyboard()
+    await callback.message.edit_text("Вы вошли как организатор",reply_markup=keyboard)
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("orgs"))
+async def choose_org(callback):
+
+    pool = await get_db_pool()
+    user_service = UserService(UserRepository(pool), SettingsRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool))
+
+    user = await user_service.find_by_tgid(callback.from_user.id)
+    ids, names = await org_service.show_owned_orgs(user.id)
+
+    if len(names) < 1:
+        keyboard = presentation.keyboards.build_zero_orgs_keyboard()
+        await callback.message.edit_text("У вас нет организаций", reply_markup=keyboard)
+    else:
+        keyboard = presentation.keyboards.build_choose_org_keyboard(ids,names)
+        await callback.message.edit_text("Выберите организацию:", reply_markup=keyboard)
+
+@router.callback_query(F.data == "create_org")
+async def start_create_org(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    waiting_for_name.add(user_id)
+    await callback.message.answer("Введите название для будущей организации:")
+    await callback.answer()
+
+   
 
 
+
+# Текстовые сообщения
 @router.message()
 async def handle_text_messages(message: types.Message):
     user_id = message.from_user.id    
@@ -115,7 +154,7 @@ async def handle_text_messages(message: types.Message):
     await message.answer("Неизвестная команда. Используйте /create или /delete.")
 
 
-
+# Вспомогательные функции
 async def handle_create_organization(message: types.Message):
     user_id = message.from_user.id
     name = message.text
@@ -134,7 +173,9 @@ async def handle_create_organization(message: types.Message):
     if is_created is None:
         organization = await organization_service.create_organization(user, name)
         waiting_for_name.remove(user_id)
+        keyboard = await presentation.keyboards.build_org_keyboard()
         await message.answer(f"Организация {name} успешно создана")
+        await message.answer("Вы вошли как организатор", reply_markup=keyboard)
     else:
         await message.answer(
             f"Организация с названием {name} уже существует.\n"
