@@ -139,15 +139,31 @@ async def cancel_delete_org(callback: CallbackQuery):
     await callback.message.edit_text(f"Организация не была удалена.")
     await callback.answer()
 
+#Войти как организатор
 @router.callback_query(F.data.startswith("owner"))
 async def as_org(callback: CallbackQuery):
     pool = await get_db_pool()
     user_service = UserService(UserRepository(pool), SettingsRepository(pool))
+    org_service = OrganizationService(OrganizationRepository(pool),OrganizationMemberRepository(pool), InviteRepository(pool))
+    ids, names = await org_service.show_owned_orgs(user.id)
     user = await user_service.find_by_tgid(callback.from_user.id)
 
-    keyboard = await presentation.keyboards.build_org_keyboard()
-    await callback.message.edit_text("Вы вошли как организатор",reply_markup=keyboard)
+    keyboard = await presentation.keyboards.build_org_keyboard(ids, names)
+    await callback.message.edit_text("Вы вошли как организатор\nВыберите организацию или создайте новую",reply_markup=keyboard)
     await callback.answer()
+
+#Выбор организации для управления
+@router.callback_query(F.data.startswith("select.org_"))
+async def choose_org(callback: types.CallbackQuery):
+    org_id = int(callback.data.split("_")[-1])
+
+    pool = await get_db_pool()
+    org_service = OrganizationService(OrganizationRepository(pool), OrganizationMemberRepository(pool), InviteRepository(pool))
+    name = await org_service.get_by_id(org_id)
+
+    keyboard = presentation.keyboards.build_manage_org_keyboard(org_id)
+
+    await callback.message.edit_text(f"Организация {name.name}", reply_markup=keyboard)
 
 @router.callback_query(F.data.startswith("orgs"))
 async def choose_org(callback):

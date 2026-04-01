@@ -8,10 +8,16 @@ def build_start_keyboard():
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
 
-async def build_org_keyboard():
-    buttons = [[InlineKeyboardButton(text="Выбрать организацию", callback_data="orgs")],
-               [InlineKeyboardButton(text="Создать организацию",callback_data="create_org")],
-               [InlineKeyboardButton(text="Назад", callback_data="start")]]
+#Клавиатура при выборе роли Организатор
+async def build_org_keyboard(orgs,names):
+    buttons = []
+
+    for org_id, name in zip(orgs, names):
+        buttons.append([InlineKeyboardButton(text=name, callback_data=f"choose.org_{org_id}")])
+    
+    buttons.append([InlineKeyboardButton(text="Создать организацию",callback_data="create_org")])
+    buttons.append([InlineKeyboardButton(text="Назад", callback_data="start")])
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     return keyboard
 
