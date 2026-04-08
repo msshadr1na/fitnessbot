@@ -8,15 +8,15 @@ class SettingsRepository:
         self.pool = pool
 
     async def create(self, settings: Settings):
-        print(f"id={settings.id}")
-        sql = "insert into settings (notification_settings) values ($1) returning id"
-
         json_value = json.dumps(settings.notification_settings)
-    
-        row = await self.pool.fetchrow(sql, json_value)
+        sql_find = "select id from settings where notification_settings = $1"
+        row = await self.pool.fetchrow(sql_find, json_value)
+        if row:
+            return Settings(id=row["id"], notification_settings=json_value)
 
-        settings.id = row["id"]
-        return settings
+        sql_insert = "insert into settings (notification_settings) values ($1) returning id"
+        row = await self.pool.fetchrow(sql_insert, json_value)
+        return Settings(id=row["id"], notification_settings=json_value)
 
 class UserRepository:
     def __init__(self, pool):
