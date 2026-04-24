@@ -1,3 +1,10 @@
-bot_token="8231168960:AAF4zUr8ZU_L9i34mLqKd-CjAuxhclhtJmY"
+from dotenv import load_dotenv
+import os
 
-db_url="postgresql://botuser:strong_password_123@localhost:5432/fitness_bot"
+load_dotenv()
+
+bot_token=os.getenv("BOT_TOKEN")
+
+db_url=os.getenv("DB_URL")
+
+
