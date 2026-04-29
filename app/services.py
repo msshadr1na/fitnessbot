@@ -54,12 +54,6 @@ class OrganizationService:
         future = now + timedelta(days=days_ahead)
         rows = await self.training_repository.get_trainings_by_trainer_in_period(worker_id, now, future)
         return rows
-
-
-
-
-
-
 # Поиск организации по названию
     async def find_by_name(self, name):
         return await self.organization_repository.find_by_name(name)
@@ -93,9 +87,13 @@ class OrganizationService:
 
 # Просмотр организаций, которыми пользователь владеет
     async def show_owned_orgs(self, user_id):
+        # Получаем только ID организаций, где пользователь — владелец (role_id = 1)
         org_ids = await self.organizationMember_repository.get_membered_orgs(user_id, 1)
+
         if not org_ids:
             return [], []
+
+        # Теперь получаем названия напрямую по ID
         names = await self.organization_repository.get_names_by_ids(org_ids)
 
         return org_ids, names
@@ -185,5 +183,15 @@ class OrganizationService:
 
     async def delete_place(self, place_id: int):
         return await self.gym_repository.delete_by_id(place_id)
+
+    async def show_client_orgs(self, user_id):
+        org_ids = await self.organizationMember_repository.get_membered_orgs(user_id, 3)
+
+        if not org_ids:
+            return [], []
+
+        names = await self.organization_repository.get_names_by_ids(org_ids)
+
+        return org_ids, names
 
 

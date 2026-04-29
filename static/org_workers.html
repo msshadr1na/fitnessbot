@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Работники</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Russo One', sans-serif; min-height: 100vh; color: #23233a; }
+        .bg-gradient { position: fixed; inset: 0; background: linear-gradient(127.42deg, #CBBAFD 9.38%, #CBE949 58.67%); z-index: -1; }
+        .container { width: 100%; max-width: 375px; margin: 0 auto; padding: 20px 14px 112px; min-height: 100vh; display: flex; flex-direction: column; }
+        .header-title { text-align: center; font-size: 24px; margin-bottom: 18px; text-transform: uppercase; }
+        .panel { background: #EFEEFC; border-radius: 20px; flex: 1; padding: 20px 14px 18px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 12px 18px rgba(46, 33, 88, 0.15); border: 1px solid #fff; }
+        .list { width: 100%; flex: 1; overflow-y: auto; }
+        .item {
+            width: 100%;
+            height: 36px;
+            margin: 0 auto 8px;
+            border: 1px solid #d6d6e7;
+            border-radius: 18px;
+            background: #ffffff;
+            font-family: inherit;
+            font-size: 11px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(57, 42, 103, 0.15);
+            transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+        }
+        .item:hover { transform: translateY(-1px); filter: brightness(1.01); }
+        .item:active { transform: translateY(1px); box-shadow: 0 1px 2px rgba(57, 42, 103, 0.12); }
+        .actions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 40px 1fr 40px;
+            gap: 10px;
+            margin-top: 10px;
+            align-items: center;
+        }
+        .small {
+            height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.55);
+            border-radius: 14px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+        }
+        .a1 {
+            background: #CBBAFD;
+            box-shadow: 0 6px 0 #9B7FCC;
+            text-transform: uppercase;
+        }
+        .nav-small {
+            background: #ffffff;
+            border-radius: 20px;
+            border: 1px solid #d6d6e7;
+            font-size: 18px;
+            box-shadow: 0 2px 4px rgba(57, 42, 103, 0.15);
+        }
+        .page-nav {
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .page-nav.visible {
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #invite-btn:hover, #refresh-btn:hover { filter: brightness(1.03); }
+        #invite-btn:active, #refresh-btn:active { transform: translateY(2px); }
+        .invite-inline {
+            width: 100%;
+            margin-top: 10px;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+        .invite-link-pill {
+            flex: 1;
+            min-height: 34px;
+            border-radius: 14px;
+            border: 1px solid #d6d6e7;
+            background: #ffffff;
+            font-size: 11px;
+            line-height: 1.2;
+            padding: 8px 10px;
+            overflow-wrap: anywhere;
+            box-shadow: 0 2px 4px rgba(57, 42, 103, 0.15);
+        }
+        .invite-icon-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 17px;
+            border: 1px solid #d6d6e7;
+            background: #ffffff;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 16px;
+            line-height: 1;
+            box-shadow: 0 2px 4px rgba(57, 42, 103, 0.15);
+        }
+        .invite-icon-btn:active { transform: translateY(1px); }
+        .status { width: 100%; font-size: 12px; margin-top: 8px; min-height: 16px; color: #5a5a5a; word-break: break-word; text-align: center; }
+        .bottom-nav-wrap {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            padding: 10px 24px calc(14px + env(safe-area-inset-bottom));
+            pointer-events: none;
+            z-index: 100;
+        }
+        .bottom-nav {
+            width: 100%;
+            max-width: 382px;
+            background: rgba(239, 238, 252, 0.98);
+            border: 1px solid #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 -7px 18px rgba(37, 27, 76, 0.19);
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 4px;
+            padding: 8px;
+            pointer-events: auto;
+            backdrop-filter: blur(3px);
+        }
+        .tab-btn {
+            border: none;
+            border-radius: 12px;
+            background: transparent;
+            min-height: 72px;
+            padding: 6px 4px 4px;
+            color: #231F20;
+            font-family: inherit;
+            font-size: 9px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background .12s ease, transform .12s ease;
+            text-transform: uppercase;
+            box-sizing: border-box;
+            flex: 1;
+        }
+        .tab-btn .icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .tab-btn .icon img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            object-position: center;
+            display: block;
+        }
+        .tab-btn span:last-child {
+            color: #231F20;
+            transition: color .12s ease;
+            font-size: 9px;
+            line-height: 1.1;
+            text-align: center;
+            width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .tab-btn:not(.active):hover {
+            background: #CBBAFD;
+            transform: translateY(-1px);
+        }
+        .tab-btn.active {
+            background: #CBBAFD;
+        }
+        .tab-btn.active .icon img {
+            filter: brightness(0) saturate(100%) invert(27%) sepia(87%) saturate(1797%) hue-rotate(253deg) brightness(84%) contrast(93%);
+        }
+        .tab-btn.active span:last-child {
+            color: #7A23B8;
+        }
+        .tab-btn.active:hover
+        {
+            background: #BBAAEF;
+        }
+
+        @media (max-width: 430px) {
+            .bottom-nav-wrap
+            {
+                padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+            }
+            .bottom-nav
+            {
+                max-width: 347px;
+                background: rgba(239,238,252,.95);
+                border: 1px solid #fff;
+                border-radius: 18px;
+                box-shadow: 0 -8px 20px rgba(37,27,76,.2);
+                gap: 2px;
+                padding: 6px;
+            }
+            .tab-btn
+            {
+                min-height: 68px;
+                padding: 4px 2px 3px;
+                gap: 4px;
+                font-size: 8px;
+            }
+            .tab-btn .icon
+            {
+                width: 32px;
+                height: 32px;
+            }
+            .tab-btn .icon img
+            {
+                width: 32px;
+                height: 32px;
+            }
+            .tab-btn span:last-child
+            {
+                font-size: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+    <div class="container">
+        <div class="header-title">СПИСОК РАБОТНИКОВ</div>
+        <div class="panel">
+            <div id="list" class="list" style="text-align:center;padding:30px 10px;">Загрузка...</div>
+            <div class="actions">
+                <button class="small nav-small page-nav" id="prev-page-btn">←</button>
+                <button class="small a1" id="invite-btn">ПРИГЛАСИТЬ</button>
+                <button class="small nav-small page-nav" id="next-page-btn">→</button>
+            </div>
+            <div id="invite-inline" class="invite-inline">
+                <div id="invite-link-pill" class="invite-link-pill"></div>
+                <button id="copy-link-btn" class="invite-icon-btn" title="Скопировать">⧉</button>
+                <button id="refresh-link-btn" class="invite-icon-btn" title="Обновить">↻</button>
+            </div>
+            <div id="status" class="status"></div>
+        </div>
+    </div>
+    <div class="bottom-nav-wrap">
+        <div class="bottom-nav">
+            <button class="tab-btn" id="tab-dashboard">
+                <span class="icon">
+                    <img src="/app/icons/main.svg?v=2" alt="">
+                </span>
+                <span>ГЛАВНАЯ</span>
+            </button>
+            <button class="tab-btn" id="tab-places">
+                <span class="icon">
+                    <img src="/app/icons/gyms.svg?v=2" alt="">
+                </span>
+                <span>ПОМЕЩЕНИЯ</span>
+            </button>
+            <button class="tab-btn active" id="tab-workers">
+                <span class="icon">
+                    <img src="/app/icons/workers.svg?v=2" alt="">
+                </span>
+                <span>РАБОТНИКИ</span>
+            </button>
+            <button class="tab-btn" id="tab-clients">
+                <span class="icon">
+                    <img src="/app/icons/clients.svg?v=2" alt="">
+                </span>
+                <span>КЛИЕНТЫ</span>
+            </button>
+            <button class="tab-btn" id="tab-events">
+                <span class="icon">
+                    <img src="/app/icons/events.svg?v=2" alt="">
+                </span>
+                <span>СОБЫТИЯ</span>
+            </button>
+        </div>
+    </div>
+    <script>
+        Telegram.WebApp.ready();
+        const orgId = new URLSearchParams(window.location.search).get("org_id");
+        const list = document.getElementById("list");
+        const statusEl = document.getElementById("status");
+        const inviteInline = document.getElementById("invite-inline");
+        const inviteLinkPill = document.getElementById("invite-link-pill");
+        const prevPageBtn = document.getElementById("prev-page-btn");
+        const nextPageBtn = document.getElementById("next-page-btn");
+        let currentInvite = "";
+        let workersData = [];
+        let currentPage = 0;
+        const perPage = 8;
+
+        function extractErrorText(detail) {
+            if (!detail) return "Не удалось получить ссылку";
+            if (typeof detail === "string") return detail;
+            if (Array.isArray(detail)) {
+                return detail
+                    .map((item) => item?.msg || item?.message || JSON.stringify(item))
+                    .join("; ");
+            }
+            return detail.message || JSON.stringify(detail);
+        }
+
+        function setStatus(text, isError = false) {
+            statusEl.textContent = text || "";
+            statusEl.style.color = isError ? "#d32f2f" : "#5a5a5a";
+        }
+
+        function showInvite(link) {
+            currentInvite = link || "";
+            if (!currentInvite) {
+                inviteInline.style.display = "none";
+                return;
+            }
+            inviteInline.style.display = "flex";
+            inviteLinkPill.textContent = currentInvite;
+        }
+
+        function renderPage(page) {
+            list.innerHTML = "";
+            if (!workersData.length) {
+                list.innerHTML = "Работников пока нет";
+                prevPageBtn.classList.remove("visible");
+                nextPageBtn.classList.remove("visible");
+                return;
+            }
+
+            const start = page * perPage;
+            const end = Math.min(start + perPage, workersData.length);
+            const pageItems = workersData.slice(start, end);
+
+            pageItems.forEach((worker) => {
+                const btn = document.createElement("button");
+                btn.className = "item";
+                btn.textContent = worker.name;
+                btn.onclick = () => window.location.href = `/app/org_worker_detail.html?org_id=${orgId}&worker_id=${worker.id}&v=2`;
+                list.appendChild(btn);
+            });
+
+            const hasPrev = page > 0;
+            const hasNext = end < workersData.length;
+            prevPageBtn.classList.toggle("visible", hasPrev);
+            nextPageBtn.classList.toggle("visible", hasNext);
+        }
+
+        async function loadWorkers() {
+            try {
+                const res = await fetch(`/api/v1/org/${orgId}/workers`);
+                const data = await res.json();
+                workersData = data.workers || [];
+                currentPage = 0;
+                renderPage(currentPage);
+            } catch (error) {
+                list.innerHTML = "Не удалось загрузить работников";
+                setStatus("Ошибка загрузки списка", true);
+            }
+        }
+
+        async function loadInvite(refresh) {
+            try {
+                const method = refresh ? "POST" : "GET";
+                const url = refresh
+                    ? `/api/v1/org/${orgId}/workers/invite/refresh`
+                    : `/api/v1/org/${orgId}/workers/invite`;
+                const res = await fetch(url, { method });
+                const data = await res.json();
+                if (!res.ok) {
+                    setStatus(extractErrorText(data.detail), true);
+                    return;
+                }
+                showInvite(data.link || "");
+                setStatus(refresh ? "Ссылка обновлена" : "Ссылка получена");
+            } catch (error) {
+                setStatus("Не удалось получить ссылку", true);
+            }
+        }
+
+        document.getElementById("copy-link-btn").onclick = async () => {
+            if (!currentInvite) return;
+            try {
+                await navigator.clipboard.writeText(currentInvite);
+                setStatus("Ссылка скопирована");
+            } catch (error) {
+                setStatus("Не удалось скопировать ссылку", true);
+            }
+        };
+        document.getElementById("invite-btn").onclick = async () => {
+            await loadInvite(false);
+        };
+        document.getElementById("refresh-link-btn").onclick = async () => {
+            await loadInvite(true);
+        };
+        prevPageBtn.onclick = () => {
+            if (currentPage > 0) {
+                currentPage -= 1;
+                renderPage(currentPage);
+            }
+        };
+        nextPageBtn.onclick = () => {
+            const maxPage = Math.ceil(workersData.length / perPage) - 1;
+            if (currentPage < maxPage) {
+                currentPage += 1;
+                renderPage(currentPage);
+            }
+        };
+        function goTo(path) { window.location.href = `${path}?org_id=${orgId}&v=2`; }
+        document.getElementById("tab-dashboard").onclick = () => goTo("/app/org_main.html");
+        document.getElementById("tab-places").onclick = () => goTo("/app/org_places.html");
+        document.getElementById("tab-workers").onclick = () => goTo("/app/org_workers.html");
+        document.getElementById("tab-clients").onclick = () => goTo("/app/org_clients.html");
+        document.getElementById("tab-events").onclick = () => goTo("/app/org_events.html");
+        loadWorkers();
+    </script>
+</body>
+</html>
