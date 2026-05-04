@@ -215,8 +215,10 @@ async def handle_start(message: types.Message, command: Command, state: FSMConte
     user = await user_service.find_by_tgid(telegram_id)
     
     start_args = getattr(command, "args", None)
-    if not start_args and message.text and message.text.startswith("/start "):
-        start_args = message.text.split(" ", 1)[1].strip()
+    if not start_args and message.text and message.text.startswith("/start"):
+        parts = message.text.split(maxsplit=1)
+        if len(parts) > 1:
+            start_args = parts[1].strip()
     if start_args and start_args.startswith("join_"):
         await state.update_data(start_args=start_args)
 
@@ -224,7 +226,11 @@ async def handle_start(message: types.Message, command: Command, state: FSMConte
         await message.answer("Для продолжения пройдите регистрацию\nВведите ваше имя:")
         await state.set_state(RegistrationState.first_name)
     else:
-        await check_invite(message, state, user.id, pool, start_args)
+        try:
+            await check_invite(message, state, user.id, pool, start_args)
+        except Exception:
+            keyboard = presentation.keyboards.build_start_keyboard()
+            await message.answer("Не удалось обработать стартовую ссылку. Попробуйте еще раз.", reply_markup=keyboard)
 
 @router.message(RegistrationState.first_name, F.text)
 async def reg_first_name(message: Message, state: FSMContext):
@@ -823,6 +829,30 @@ async def check_invite(message: types.Message,state: FSMContext, user_id: int, p
             org = await org_service.get_by_id(org_id)
             role_name = {2: "тренер", 3: "клиент"}.get(role_id, "участник")
             await message.answer(f"Вы добавлены в организацию {org.name} как {role_name}!")
+
+            # Уведомляем организаторов о новом участнике
+            try:
+                new_user = await UserService(UserRepository(pool), SettingsRepository(pool)).find_by_tgid(user_id)
+                new_user_name = "участник"
+                if new_user:
+                    new_user_name = f"{new_user.first_name} {new_user.last_name}".strip()
+
+                owner_rows = await pool.fetch(
+                    """
+                    select u.telegram_id
+                    from organization_member om
+                    join users u on u.id = om.user_id
+                    where om.organization_id = $1 and om.role_id = 1
+                    """,
+                    org_id,
+                )
+                owner_tg_ids = [r["telegram_id"] for r in owner_rows]
+                notify_text = f"В организацию {org.name} добавлен {role_name}: {new_user_name}."
+                for tg_id in owner_tg_ids:
+                    if tg_id:
+                        await message.bot.send_message(tg_id, notify_text)
+            except Exception:
+                pass
         except ValueError as e:
             await message.answer(f"Ошибка: {e}")
         except Exception as e:
